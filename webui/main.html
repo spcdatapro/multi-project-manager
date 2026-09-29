@@ -1,0 +1,254 @@
+<html>
+<head>
+  <title>Multi-Project Manager</title>
+  <script type="module" src="/plugins/multi_project_manager/webui/mpm-store.js"></script>
+</head>
+<body>
+  <div x-data>
+    <template x-if="$store.multiProjectManager">
+      <div x-data="{ get m() { return $store.multiProjectManager; } }"
+        x-init="m.onOpen()" x-destroy="m.cleanup()">
+
+        <div class="mpm-tabs" role="group" aria-label="Multi-Project Manager sections">
+          <button type="button" class="button" :class="{ confirm: m.tab === 'propagate' }"
+            :aria-pressed="m.tab === 'propagate'" @click="m.setTab('propagate')">
+            <x-icon name="sync_alt"></x-icon>
+            <span class="mpm-tab-long">Edit &amp; propagate</span><span class="mpm-tab-short">Propagate</span>
+          </button>
+          <button type="button" class="button" :class="{ confirm: m.tab === 'duplicate' }"
+            :aria-pressed="m.tab === 'duplicate'" @click="m.setTab('duplicate')">
+            <x-icon name="content_copy"></x-icon> <span>Duplicate</span>
+          </button>
+          <button type="button" class="button" :class="{ confirm: m.tab === 'history' }"
+            :aria-pressed="m.tab === 'history'" @click="m.setTab('history')">
+            <x-icon name="history"></x-icon> <span>History</span>
+          </button>
+        </div>
+
+        <div class="mpm-panel" x-show="m.tab === 'propagate'">
+          <p class="mpm-muted" x-show="m.loading">Loading projects…</p>
+          <p class="mpm-muted" x-show="!m.loading &amp;&amp; m.projects.length &lt; 2">
+            You need at least two projects to propagate sections.
+          </p>
+
+          <div x-show="!m.loading &amp;&amp; m.projects.length >= 2">
+            <div class="mpm-field">
+              <label class="mpm-label" for="mpm-prop-source">Source project</label>
+              <select id="mpm-prop-source" class="mpm-input" x-model="m.prop.source" @change="m.onSourceChanged()">
+                <template x-for="p in m.projects" :key="p.name">
+                  <option :value="p.name" :selected="p.name === m.prop.source" x-text="p.title || p.name"></option>
+                </template>
+              </select>
+              <span class="mpm-hint">Edit the sections below if needed, then tick the ones to copy to the other projects.</span>
+            </div>
+
+            <p class="mpm-muted" x-show="m.prop.loadingSections">Loading sections…</p>
+
+            <div x-show="!m.prop.loadingSections">
+              <template x-for="s in m.sectionDefs" :key="s.key">
+                <div class="mpm-card">
+                  <div class="mpm-card-head">
+                    <label class="mpm-check mpm-check-tight">
+                      <input type="checkbox" x-model="m.prop.include[s.key]">
+                      <span class="mpm-label mpm-label-inline" x-text="s.label"></span>
+                    </label>
+                    <span class="mpm-badge" x-show="m.isEdited(s.key)">edited</span>
+                  </div>
+                  <span class="mpm-hint" x-show="s.hint" x-text="s.hint"></span>
+                  <textarea class="mpm-input mpm-textarea" :rows="s.rows" spellcheck="false"
+                    x-model="m.prop.edit[s.key]"></textarea>
+                  <div class="mpm-modes" x-show="s.env &amp;&amp; m.prop.include[s.key]">
+                    <label class="mpm-check mpm-check-tight">
+                      <input type="radio" :name="'mpm-mode-' + s.key" value="merge" x-model="m.prop.modes[s.key]">
+                      <span>Merge <span class="mpm-hint">keeps keys that only exist in the targets</span></span>
+                    </label>
+                    <label class="mpm-check mpm-check-tight">
+                      <input type="radio" :name="'mpm-mode-' + s.key" value="replace" x-model="m.prop.modes[s.key]">
+                      <span>Replace <span class="mpm-hint">targets become identical to the source</span></span>
+                    </label>
+                  </div>
+                </div>
+              </template>
+
+              <div class="mpm-card">
+                <div class="mpm-card-head">
+                  <span class="mpm-label mpm-label-inline">
+                    Target projects
+                    <span class="mpm-muted" x-text="'(' + m.selectedTargets().length + ' selected)'"></span>
+                  </span>
+                  <span class="mpm-links">
+                    <button type="button" class="mpm-link" @click="m.setAllTargets(true)">Select all</button>
+                    <button type="button" class="mpm-link" @click="m.setAllTargets(false)">Select none</button>
+                  </span>
+                </div>
+                <template x-for="p in m.propTargetProjects()" :key="p.name">
+                  <label class="mpm-check mpm-check-tight">
+                    <input type="checkbox" x-model="m.prop.targets[p.name]">
+                    <span>
+                      <span x-text="p.title || p.name"></span>
+                      <span class="mpm-hint" x-text="'usr/projects/' + p.name"></span>
+                    </span>
+                  </label>
+                </template>
+              </div>
+
+              <div class="mpm-actions">
+                <button type="button" class="button confirm" :disabled="!m.canPropagate()" @click="m.propagate()">
+                  <x-icon name="sync_alt"></x-icon>
+                  <span x-text="m.prop.busy ? 'Propagating…' : 'Propagate…'"></span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mpm-panel" x-show="m.tab === 'duplicate'">
+          <p class="mpm-muted" x-show="m.loading">Loading projects…</p>
+          <p class="mpm-muted" x-show="!m.loading &amp;&amp; m.projects.length === 0">There are no projects to duplicate yet.</p>
+
+          <div x-show="!m.loading &amp;&amp; m.projects.length > 0">
+            <div class="mpm-field">
+              <label class="mpm-label" for="mpm-dup-source">Project to duplicate</label>
+              <select id="mpm-dup-source" class="mpm-input" x-model="m.dup.source">
+                <template x-for="p in m.projects" :key="p.name">
+                  <option :value="p.name" :selected="p.name === m.dup.source" x-text="p.title || p.name"></option>
+                </template>
+              </select>
+            </div>
+
+            <div class="mpm-field">
+              <label class="mpm-label" for="mpm-dup-title">Title of the new project</label>
+              <input id="mpm-dup-title" class="mpm-input" type="text" maxlength="120"
+                placeholder="e.g. Client B - Website" x-model="m.dup.title"
+                @keydown.enter="m.duplicate()">
+              <div class="mpm-hint" x-show="m.dup.title.trim() &amp;&amp; m.dupFolder()">
+                Folder: <code>usr/projects/<span x-text="m.dupFolder()"></span></code>
+              </div>
+              <div class="mpm-hint mpm-hint-warn" x-show="m.dupHint()" x-text="m.dupHint()"></div>
+            </div>
+
+            <div class="mpm-field">
+              <span class="mpm-label">What to copy</span>
+              <template x-for="o in m.duplicateOptions" :key="o.key">
+                <label class="mpm-check">
+                  <input type="checkbox" x-model="m.dup.options[o.key]">
+                  <span>
+                    <span x-text="o.label"></span>
+                    <span class="mpm-hint" x-show="o.hint" x-text="o.hint"></span>
+                  </span>
+                </label>
+              </template>
+              <p class="mpm-hint">The title and the project settings file are always copied. Chats are never copied.</p>
+            </div>
+
+            <label class="mpm-check">
+              <input type="checkbox" x-model="m.dup.openAfter">
+              <span>Open the new project for editing when done</span>
+            </label>
+
+            <div class="mpm-actions">
+              <button type="button" class="button confirm" :disabled="!m.canDuplicate()" @click="m.duplicate()">
+                <x-icon name="content_copy"></x-icon>
+                <span x-text="m.dup.busy ? 'Duplicating…' : 'Duplicate project'"></span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="mpm-panel" x-show="m.tab === 'history'" style="display: none;">
+          <p class="mpm-muted" x-show="m.history.loading">Loading history…</p>
+          <p class="mpm-muted" x-show="!m.history.loading &amp;&amp; m.history.items.length === 0">
+            No backups yet. One is created automatically before every propagation, so you can undo it here.
+          </p>
+
+          <template x-for="b in m.history.items" :key="b.id">
+            <div class="mpm-card">
+              <div class="mpm-card-head">
+                <span>
+                  <span class="mpm-label mpm-label-inline" x-text="m.formatDate(b.created_at)"></span>
+                  <span class="mpm-muted" x-text="'from ' + b.source_title"></span>
+                </span>
+                <span class="mpm-badge" x-show="b.undone">restored</span>
+              </div>
+              <template x-for="c in b.changes" :key="c.project + c.role">
+                <div class="mpm-change" :class="{ 'mpm-change-done': c.restored }">
+                  <span x-text="c.title"></span>
+                  <span class="mpm-muted" x-show="c.role === 'source'">(source)</span>
+                  <span class="mpm-muted" x-show="!c.exists">(deleted)</span>
+                  <span class="mpm-hint mpm-inline" x-text="c.sections.map(k => m.sectionLabel(k)).join(', ')"></span>
+                  <span class="mpm-badge" x-show="c.restored &amp;&amp; !b.undone">restored</span>
+                </div>
+              </template>
+              <div class="mpm-actions mpm-actions-row">
+                <button type="button" class="button cancel" :disabled="m.history.busy" @click="m.deleteBackup(b)">
+                  <x-icon name="delete"></x-icon> Delete
+                </button>
+                <button type="button" class="button confirm" :disabled="m.history.busy || b.undone" @click="m.undo(b)">
+                  <x-icon name="undo"></x-icon> Undo
+                </button>
+              </div>
+            </div>
+          </template>
+
+          <div x-show="m.history.items.length > 0">
+            <p class="mpm-hint">
+              The last <span x-text="m.history.max"></span> backups are kept. They hold the previous text of the sections,
+              secret values included, on the server (usr/multi_project_manager/backups).
+              <button type="button" class="mpm-link" @click="m.deleteAllBackups()">Delete all backups</button>
+            </p>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+  <style>
+    .mpm-tabs { display: flex; gap: var(--spacing-sm); margin: var(--spacing-md); flex-wrap: wrap; }
+    .mpm-panel { margin: var(--spacing-md); }
+    .mpm-field { margin-bottom: var(--spacing-md); }
+    .mpm-label { display: block; font-weight: 600; margin-bottom: 0.35em; }
+    .mpm-input {
+      width: 100%; box-sizing: border-box; padding: 0.5em 0.6em;
+      border: 1px solid var(--color-border); border-radius: 0.4em;
+      background: var(--color-background); color: var(--color-text);
+    }
+    .mpm-muted, .mpm-hint { color: var(--color-text-muted); font-size: 0.9em; }
+    .mpm-hint { display: block; margin-top: 0.25em; }
+    .mpm-hint-warn { color: var(--color-warning, #f59e0b); }
+    .mpm-check { display: flex; gap: 0.6em; align-items: flex-start; margin: 0.4em 0; cursor: pointer; }
+    .mpm-check input { margin-top: 0.25em; }
+    .mpm-actions { margin-top: var(--spacing-md); display: flex; justify-content: flex-end; }
+    .mpm-card { border: 1px solid var(--color-border); border-radius: 0.5em; padding: 0.8em 1em; margin-bottom: var(--spacing-md); background: var(--color-panel); }
+    .mpm-card-head { display: flex; justify-content: space-between; align-items: center; gap: 0.6em; margin-bottom: 0.3em; }
+    .mpm-label-inline { display: inline; margin: 0; }
+    .mpm-check-tight { margin: 0.2em 0; }
+    .mpm-textarea { margin-top: 0.4em; font-family: var(--font-family-code, monospace); resize: vertical; }
+    .mpm-modes { display: flex; gap: 1.5em; flex-wrap: wrap; margin-top: 0.5em; }
+    .mpm-badge { font-size: 0.8em; padding: 0.05em 0.6em; border: 1px solid var(--color-border); border-radius: 1em; color: var(--color-text-muted); }
+    .mpm-links { display: flex; gap: 0.8em; }
+    .mpm-change { display: flex; gap: 0.5em; align-items: baseline; flex-wrap: wrap; padding: 0.15em 0; }
+    .mpm-change-done { opacity: 0.6; }
+    .mpm-inline { display: inline; margin: 0; }
+    .mpm-actions-row { gap: 0.6em; margin-top: 0.6em; }
+
+    /* long names and paths wrap instead of pushing the layout wider than the screen */
+    .mpm-check > span, .mpm-change > span { min-width: 0; overflow-wrap: anywhere; }
+    .mpm-hint { overflow-wrap: anywhere; }
+    .mpm-card-head, .mpm-actions { flex-wrap: wrap; }
+    .mpm-tab-short { display: none; }
+
+    @media (max-width: 520px) {
+      .mpm-tabs { flex-wrap: nowrap; gap: var(--spacing-xs); margin: var(--spacing-xs) 0 var(--spacing-sm); }
+      .mpm-tabs .button { flex: 1 1 0; min-width: 0; padding: 0.45em 0.4em; font-size: 0.85em; white-space: nowrap; justify-content: center; }
+      .mpm-tab-long { display: none; }
+      .mpm-tab-short { display: inline; }
+      .mpm-panel { margin: var(--spacing-xs) 0; }
+      .mpm-card { padding: 0.6em 0.7em; }
+      .mpm-actions .button { flex: 1 1 auto; justify-content: center; }
+    }
+    @media (max-width: 380px) {
+      .mpm-tabs x-icon { display: none; }
+    }
+    .mpm-link { background: none; border: none; padding: 0; color: var(--color-primary, #3b82f6); cursor: pointer; font-size: 0.9em; }
+  </style>
+</body>
+</html>

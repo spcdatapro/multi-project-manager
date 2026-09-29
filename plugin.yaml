@@ -1,0 +1,7 @@
+name: multi_project_manager
+title: Multi-Project Manager
+description: Duplicate projects and propagate description, instructions and variables from one project to many.
+version: 0.1.0
+settings_sections: []
+per_project_config: false
+per_agent_config: false

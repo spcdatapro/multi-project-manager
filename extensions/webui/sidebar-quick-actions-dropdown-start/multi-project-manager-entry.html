@@ -1,0 +1,12 @@
+<!-- Multi-Project Manager -->
+<div x-data>
+  <button
+    x-move-after=".quick-actions-dropdown .dropdown-header + .dropdown-item"
+    class="dropdown-item"
+    id="multi-project-manager-dropdown"
+    title="Multi-Project Manager"
+    @click="openModal('/plugins/multi_project_manager/webui/main.html'); dropdownOpen = false">
+    <x-icon name="account_tree"></x-icon>
+    <span>Multi-Project Manager</span>
+  </button>
+</div>

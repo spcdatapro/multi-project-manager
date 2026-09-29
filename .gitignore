@@ -1,0 +1,13 @@
+# Personal / machine-specific files: never published
+CLAUDE.md
+.claude/
+.mcp.json
+
+# Runtime state Agent Zero writes into the mounted plugin folder
+/config.json
+/.toggle-*
+
+# Python / test caches
+__pycache__/
+*.pyc
+.pytest_cache/
